@@ -1,21 +1,16 @@
 import React, { useState, useEffect } from "react";
-import PocketBase from "pocketbase";
-
-// Instancia de PocketBase conectada a la instancia local
-const POCKETBASE_URL = "http://127.0.0.1:8090";
-console.log("Intentando conectar a PocketBase en:", POCKETBASE_URL);
-const pb = new PocketBase(POCKETBASE_URL);
+import { useAuth } from "../context/AuthContext";
 
 const AuctionList = () => {
+  const { isAuthenticated, pb } = useAuth();
+  const POCKETBASE_URL = "http://127.0.0.1:8090";
+
   const [auctions, setAuctions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [bidForms, setBidForms] = useState({});
   const [bidAmount, setBidAmount] = useState({});
   const [bidError, setBidError] = useState({});
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    !!pb.authStore.isValid
-  );
 
   // Función para formatear la fecha a una cuenta regresiva legible
   const formatTimeLeft = (endTimeString) => {
@@ -225,18 +220,8 @@ const AuctionList = () => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Efecto para escuchar cambios en la autenticación
-  useEffect(() => {
-    // Verificamos el estado de autenticación inicial
-    setIsAuthenticated(pb.authStore.isValid);
-
-    // Escuchamos cambios en la autenticación
-    const unsubscribe = pb.authStore.onChange(() => {
-      setIsAuthenticated(pb.authStore.isValid);
-    });
-
-    return unsubscribe;
-  }, []);
+  // No necesitamos manejar el estado de autenticación aquí
+  // ya que lo obtenemos del contexto de autenticación
 
   // Efecto para suscribirse a las pujas en tiempo real
   useEffect(() => {
@@ -280,7 +265,7 @@ const AuctionList = () => {
         }
       });
     };
-  }, [auctions]);
+  }, [auctions, pb]);
 
   // Función para mostrar/ocultar el formulario de puja
   const toggleBidForm = (auctionId) => {
