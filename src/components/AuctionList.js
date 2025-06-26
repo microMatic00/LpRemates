@@ -277,6 +277,18 @@ const AuctionList = () => {
       return;
     }
 
+    // Buscar la subasta correspondiente
+    const auction = auctions.find((a) => a.id === auctionId);
+
+    // Verificar si es una subasta propia
+    if (auction && auction.user === pb.authStore.model?.id) {
+      setBidError({
+        ...bidError,
+        [auctionId]: "No puedes pujar en tu propia subasta",
+      });
+      return;
+    }
+
     setBidForms({
       ...bidForms,
       [auctionId]: !bidForms[auctionId],
@@ -310,7 +322,7 @@ const AuctionList = () => {
 
       const amount = parseFloat(bidAmount[auction.id]);
 
-      // Validamos que la puja sea mayor al precio actual
+      // Validamos que la puja sea mayor al precio current
       if (amount <= auction.current_price) {
         setBidError({
           ...bidError,
@@ -319,16 +331,35 @@ const AuctionList = () => {
         return;
       }
 
+      // Verificamos si la subasta pertenece al usuario actual
+      if (auction.user === pb.authStore.model?.id) {
+        setBidError({
+          ...bidError,
+          [auction.id]: `No puedes pujar en tu propia subasta`,
+        });
+        return;
+      }
+
       try {
         // Creamos la nueva puja
-        await pb.collection("bids").create({
+        const newBid = await pb.collection("bids").create({
           auction: auction.id,
           user: pb.authStore.model?.id,
           amount: amount,
           created: new Date().toISOString(),
         });
+
+        console.log("✅ Puja creada exitosamente:", newBid);
+        console.log("🔍 ID de subasta utilizado:", auction.id);
+        console.log("🔍 Tipo de ID de subasta:", typeof auction.id);
       } catch (err) {
         console.error("Error al crear la puja:", err);
+        console.log("🔍 Datos de la petición:", {
+          auction: auction.id,
+          user: pb.authStore.model?.id,
+          amount: amount,
+        });
+
         if (err.status === 404) {
           setBidError({
             ...bidError,
@@ -353,16 +384,67 @@ const AuctionList = () => {
 
       try {
         // Actualizamos el precio actual de la subasta
+        console.log(
+          "🔄 Intentando actualizar precio de subasta con ID:",
+          auction.id
+        );
+
+        // Verificamos que la subasta exista antes de actualizarla
+        try {
+          const auctionCheck = await pb
+            .collection("auctions")
+            .getOne(auction.id);
+          console.log("✅ Subasta encontrada:", auctionCheck.id);
+        } catch (checkErr) {
+          console.error("❌ Error al verificar la subasta:", checkErr);
+        }
+
         await pb.collection("auctions").update(auction.id, {
           current_price: amount,
         });
+
+        console.log("✅ Precio de subasta actualizado correctamente");
       } catch (err) {
-        console.error("Error al actualizar el precio de la subasta:", err);
+        console.error("❌ Error al actualizar el precio de la subasta:", err);
+        console.log("🔍 Código de estado:", err.status);
+        console.log("🔍 Mensaje de error:", err.message);
+        console.log("🔍 Datos del error:", err.data);
+
+        // Mensaje de error más específico basado en el tipo de error
+        let errorMessage =
+          "La puja se registró pero el precio no se actualizó automáticamente.";
+
+        if (err.status === 404) {
+          errorMessage += " No se encontró la subasta con ID: " + auction.id;
+        } else if (err.status === 403) {
+          errorMessage += " No tienes permisos para actualizar la subasta.";
+        } else if (err.status === 400) {
+          errorMessage += " Datos de actualización inválidos.";
+        }
+
         // Aunque hubo error al actualizar el precio, la puja se creó correctamente,
         // por lo que mostramos una advertencia pero no un error crítico
-        console.warn(
-          "La puja se registró pero el precio no se actualizó automáticamente."
-        );
+        console.warn(errorMessage);
+
+        // Notificamos al usuario con una alerta menos intrusiva
+        const alertDiv = document.createElement("div");
+        alertDiv.className =
+          "fixed bottom-4 right-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded shadow-lg z-50";
+        alertDiv.innerHTML = `
+          <div class="flex">
+            <div class="py-1"><svg class="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/></svg></div>
+            <div>
+              <p class="font-bold">Atención</p>
+              <p class="text-sm">${errorMessage}</p>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(alertDiv);
+        setTimeout(() => {
+          alertDiv.style.opacity = "0";
+          alertDiv.style.transition = "opacity 0.5s";
+          setTimeout(() => document.body.removeChild(alertDiv), 500);
+        }, 5000);
       }
 
       // Actualizamos la lista de subastas localmente
@@ -505,111 +587,159 @@ const AuctionList = () => {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {auctions.map((auction) => (
-        <div
-          key={auction.id}
-          className="bg-white rounded-lg shadow-lg overflow-hidden"
-        >
-          {/* Imagen de la subasta */}
-          <div className="h-48 w-full bg-gray-300 overflow-hidden">
-            {auction.image ? (
-              <img
-                src={`http://127.0.0.1:8090/api/files/auctions/${auction.id}/${auction.image}`}
-                alt={auction.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                <span className="text-gray-500">Sin imagen</span>
+      {auctions.map((auction) => {
+        // Verificamos si la subasta pertenece al usuario actual
+        const isOwnAuction = auction.user === pb.authStore.model?.id;
+
+        return (
+          <div
+            key={auction.id}
+            className={`bg-white/70 backdrop-blur-lg rounded-xl shadow-lg overflow-hidden border border-white/20 transition-all duration-300 hover:shadow-xl hover:transform hover:scale-[1.02] ${
+              isOwnAuction ? "ring-2 ring-blue-400" : ""
+            }`}
+          >
+            {/* Etiqueta de subasta propia */}
+            {isOwnAuction && (
+              <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs py-1 px-2 rounded-full shadow-md">
+                Tu subasta
               </div>
             )}
-          </div>
 
-          {/* Información de la subasta */}
-          <div className="p-4">
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">
-              {auction.title}
-            </h2>
-
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-gray-600 text-sm">
-                Creado por:{" "}
-                {auction.expand?.user?.name || "Usuario desconocido"}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <span className="block text-sm text-gray-500">
-                  Precio actual:
-                </span>
-                <span className="text-2xl font-bold text-green-600">
-                  ${auction.current_price.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="block text-sm text-gray-500">
-                  Tiempo restante:
-                </span>
-                <span className="font-mono text-amber-600 font-semibold">
-                  {formatTimeLeft(auction.end_time)}
-                </span>
-              </div>
-            </div>
-
-            {/* Botón para pujar */}
-            <button
-              onClick={() => toggleBidForm(auction.id)}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200"
-            >
-              {bidForms[auction.id] ? "Cancelar" : "Pujar"}
-            </button>
-
-            {/* Formulario de puja */}
-            {bidForms[auction.id] && (
-              <div className="mt-3 border-t pt-3">
-                <div className="mb-2">
-                  <label
-                    htmlFor={`bid-${auction.id}`}
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Tu oferta (${auction.current_price.toLocaleString()} o más):
-                  </label>
-                  <input
-                    type="number"
-                    id={`bid-${auction.id}`}
-                    value={bidAmount[auction.id]}
-                    onChange={(e) =>
-                      handleBidChange(auction.id, parseFloat(e.target.value))
-                    }
-                    min={auction.current_price + 1}
-                    step="100"
-                    className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
+            {/* Imagen de la subasta */}
+            <div className="h-48 w-full bg-gray-300 overflow-hidden relative">
+              {auction.image ? (
+                <img
+                  src={`http://127.0.0.1:8090/api/files/auctions/${auction.id}/${auction.image}`}
+                  alt={auction.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                  <span className="text-gray-500">Sin imagen</span>
                 </div>
+              )}
+            </div>
+
+            {/* Información de la subasta */}
+            <div className="p-5">
+              <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                {auction.title}
+              </h2>
+
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600 text-sm flex items-center">
+                  {isOwnAuction ? (
+                    <>
+                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                      <span className="font-medium">Tu subasta</span>
+                    </>
+                  ) : (
+                    <>
+                      Creado por:{" "}
+                      {auction.expand?.user?.name || "Usuario desconocido"}
+                    </>
+                  )}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <span className="block text-sm text-gray-500">
+                    Precio actual:
+                  </span>
+                  <span className="text-2xl font-bold text-green-600">
+                    ${auction.current_price.toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-sm text-gray-500">
+                    Tiempo restante:
+                  </span>
+                  <span className="font-mono text-amber-600 font-semibold">
+                    {formatTimeLeft(auction.end_time)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botón para pujar o mensaje de subasta propia */}
+              {isOwnAuction ? (
+                <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-xl text-center">
+                  <p className="flex items-center justify-center text-sm">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 mr-1.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    No puedes pujar en tu propia subasta
+                  </p>
+                </div>
+              ) : (
                 <button
-                  onClick={() => handleSubmitBid(auction)}
-                  className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition duration-200"
+                  onClick={() => toggleBidForm(auction.id)}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg active:scale-95"
                 >
-                  Confirmar puja
+                  {bidForms[auction.id] ? "Cancelar" : "Pujar"}
                 </button>
-                {bidError[auction.id] && (
-                  <p className="text-red-500 text-sm mt-1">
+              )}
+
+              {/* Formulario de puja (solo si no es subasta propia) */}
+              {!isOwnAuction && bidForms[auction.id] && (
+                <div className="mt-4 border-t border-gray-200/50 pt-4">
+                  <div className="mb-3">
+                    <label
+                      htmlFor={`bid-${auction.id}`}
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Tu oferta (${auction.current_price.toLocaleString()} o
+                      más):
+                    </label>
+                    <input
+                      type="number"
+                      id={`bid-${auction.id}`}
+                      value={bidAmount[auction.id]}
+                      onChange={(e) =>
+                        handleBidChange(auction.id, parseFloat(e.target.value))
+                      }
+                      min={auction.current_price + 1}
+                      step="100"
+                      className="mt-2 w-full p-3 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleSubmitBid(auction)}
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-3 px-4 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg active:scale-95"
+                  >
+                    Confirmar puja
+                  </button>
+                  {bidError[auction.id] && (
+                    <p className="text-red-500 text-sm mt-2 bg-red-50/60 p-2 rounded-lg">
+                      {bidError[auction.id]}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Mensaje de error si no está autenticado y trató de pujar */}
+              {!isOwnAuction &&
+                !bidForms[auction.id] &&
+                bidError[auction.id] && (
+                  <p className="text-red-500 text-sm mt-2 bg-red-50/60 p-2 rounded-lg">
                     {bidError[auction.id]}
                   </p>
                 )}
-              </div>
-            )}
-
-            {/* Mensaje de error si no está autenticado y trató de pujar */}
-            {!bidForms[auction.id] && bidError[auction.id] && (
-              <p className="text-red-500 text-sm mt-1">
-                {bidError[auction.id]}
-              </p>
-            )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
