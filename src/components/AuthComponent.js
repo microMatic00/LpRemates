@@ -1,45 +1,33 @@
 import React, { useState, useEffect } from "react";
-import PocketBase from "pocketbase";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
-// Instancia de PocketBase conectada a la instancia local
-const POCKETBASE_URL = "http://127.0.0.1:8090";
-console.log("AuthComponent: Conectando a PocketBase en:", POCKETBASE_URL);
-const pb = new PocketBase(POCKETBASE_URL);
-
-const AuthComponent = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    !!pb.authStore.isValid
-  );
-  const [userData, setUserData] = useState(null);
+const AuthComponent = ({ redirectAfterLogin = false }) => {
+  const { isAuthenticated, user, login, register, logout } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [showRegister, setShowRegister] = useState(false);
   const [name, setName] = useState("");
+  const navigate = useNavigate();
 
-  // Efecto para verificar el estado de autenticación
+  // Efecto para redirigir si el usuario ya está autenticado
   useEffect(() => {
-    // Verificamos el estado de autenticación inicial
-    checkAuthState();
-
-    // Escuchamos cambios en la autenticación
-    const unsubscribe = pb.authStore.onChange(() => {
-      checkAuthState();
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const checkAuthState = () => {
-    setIsAuthenticated(pb.authStore.isValid);
-    setUserData(pb.authStore.model);
-  };
+    if (redirectAfterLogin && isAuthenticated) {
+      navigate("/home");
+    }
+  }, [isAuthenticated, navigate, redirectAfterLogin]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       setError(null);
-      await pb.collection("users").authWithPassword(email, password);
+      const result = await login(email, password);
+      if (!result.success) {
+        setError(result.error);
+      } else if (redirectAfterLogin) {
+        navigate("/home");
+      }
     } catch (err) {
       console.error("Error de inicio de sesión:", err);
       setError(
@@ -52,16 +40,16 @@ const AuthComponent = () => {
     e.preventDefault();
     try {
       setError(null);
-      const data = {
-        email,
-        password,
-        passwordConfirm: password,
-        name,
-      };
+      const result = await register(email, password, name);
 
-      await pb.collection("users").create(data);
-      await pb.collection("users").authWithPassword(email, password);
-      setShowRegister(false);
+      if (!result.success) {
+        setError(result.error);
+      } else {
+        setShowRegister(false);
+        if (redirectAfterLogin) {
+          navigate("/home");
+        }
+      }
     } catch (err) {
       console.error("Error de registro:", err);
       setError(
@@ -71,21 +59,21 @@ const AuthComponent = () => {
   };
 
   const handleLogout = () => {
-    pb.authStore.clear();
+    logout();
   };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
-      {isAuthenticated && userData ? (
+      {isAuthenticated && user ? (
         <div>
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-gray-700">
                 <span className="font-medium">Usuario:</span>{" "}
-                {userData.name || userData.email}
+                {user.name || user.email}
               </p>
-              {userData.email && (
-                <p className="text-gray-500 text-sm">{userData.email}</p>
+              {user.email && (
+                <p className="text-gray-500 text-sm">{user.email}</p>
               )}
             </div>
             <button
