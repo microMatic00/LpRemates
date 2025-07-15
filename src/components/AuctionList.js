@@ -595,14 +595,13 @@ const AuctionList = () => {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
       {auctions.map((auction) => {
         // Verificamos si la subasta pertenece al usuario actual
         const isOwnAuction = auction.user === pb.authStore.model?.id;
-        // Determinar si la subasta está finalizada (con margen de 5 segundos después de la hora de finalización)
+        // Determinar si la subasta está finalizada
         const endTimeMs = new Date(auction.end_time).getTime();
         const nowMs = Date.now();
-        // La subasta se considera finalizada cuando el tiempo ha terminado
         const isReallyFinished = endTimeMs <= nowMs;
         // Determinar si la subasta está por finalizar (menos de 1 hora)
         const timeLeftMs = endTimeMs - nowMs;
@@ -611,42 +610,71 @@ const AuctionList = () => {
         return (
           <div
             key={auction.id}
-            className={`rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:transform hover:scale-[1.02]
+            className={`rounded-2xl overflow-hidden transition-all duration-300 transform hover:scale-[1.02]
               ${
                 isReallyFinished
-                  ? "bg-white border border-gray-300 opacity-75 grayscale"
+                  ? "border border-gray-300 opacity-80 grayscale shadow-lg"
                   : isEndingSoon
-                  ? "bg-white border-4 border-amber-500 shadow-md hover:shadow-xl"
-                  : "bg-white border border-gray-200 hover:shadow-xl"
+                  ? "border-4 border-amber-500 shadow-xl"
+                  : "border border-white/30 shadow-lg"
               }
               ${isOwnAuction ? "ring-2 ring-blue-400" : ""}
             `}
           >
             {/* Etiqueta de subasta propia */}
             {isOwnAuction && (
-              <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs py-1 px-2 rounded-full shadow-md">
+              <div className="absolute top-3 right-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs py-1.5 px-3 rounded-full shadow-md font-medium z-10">
                 Tu subasta
               </div>
             )}
 
             {/* Imagen de la subasta */}
-            <div className="h-48 w-full bg-gray-300 overflow-hidden relative">
+            <div className="h-56 w-full overflow-hidden relative">
               {auction.image ? (
                 <img
                   src={`http://127.0.0.1:8090/api/files/auctions/${auction.id}/${auction.image}`}
                   alt={auction.title}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                  <span className="text-gray-500">Sin imagen</span>
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+                  <span className="text-gray-500 font-medium">Sin imagen</span>
+                </div>
+              )}
+
+              {/* Overlay con tiempo restante */}
+              {!isReallyFinished && (
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm text-white p-2 flex justify-center">
+                  <div className="flex items-center space-x-1">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span
+                      className={`text-sm font-medium ${
+                        isEndingSoon ? "text-amber-300" : "text-white"
+                      }`}
+                    >
+                      {formatTimeLeft(auction.end_time)}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Información de la subasta */}
-            <div className="p-5">
-              <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+            <div className="p-6">
+              <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
                 {auction.title}
               </h2>
               {isEndingSoon && !isReallyFinished && (

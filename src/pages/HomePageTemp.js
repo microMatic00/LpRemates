@@ -27,9 +27,8 @@ function HomePage() {
           </p>
         </div>
 
-        {/* Listado de subastas con fondo transparente */}
-        {/* <div className="animate-fade-in max-w-6xl mx-auto rounded-2xl shadow-lg border border-white/30 p-8"> */}
-        <div className="">
+        {/* Listado de subastas con diseño mejorado */}
+        <div className="animate-fade-in max-w-6xl mx-auto bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/40 p-8">
           <AuctionList />
         </div>
 

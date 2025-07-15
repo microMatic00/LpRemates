@@ -1,8 +1,16 @@
 import React from "react";
-import AuctionList from "../components/AuctionList";
+import CreateAuctionForm from "../components/CreateAuctionForm";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 
-function HomePage() {
+function CreateAuctionPage() {
+  const navigate = useNavigate();
+
+  const handleAuctionCreated = () => {
+    // Redirigir a la página principal después de crear una subasta
+    navigate("/home");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-indigo-100 py-6 flex flex-col">
       {/* Decoración de fondo - Ahora está fuera del contenedor principal y ocupa toda la pantalla */}
@@ -19,18 +27,17 @@ function HomePage() {
         {/* Título de la sección */}
         <div className="mb-10 text-center animate-slide-up max-w-4xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-800 drop-shadow-sm">
-            Subastas Activas
+            Crear Nueva Subasta
           </h2>
           <div className="w-32 h-1.5 bg-gradient-to-r from-blue-500 to-purple-600 mx-auto mt-3 rounded-full"></div>
           <p className="text-gray-600 mt-3 text-lg">
-            Encuentra los mejores artículos para pujar
+            Completa el formulario para crear tu subasta
           </p>
         </div>
 
-        {/* Listado de subastas con fondo transparente */}
-        {/* <div className="animate-fade-in max-w-6xl mx-auto rounded-2xl shadow-lg border border-white/30 p-8"> */}
-        <div className="">
-          <AuctionList />
+        {/* Formulario sin fondo para mostrar el gradiente */}
+        <div className="animate-fade-in max-w-4xl mx-auto rounded-2xl shadow-lg border border-white/30 p-8">
+          <CreateAuctionForm onAuctionCreated={handleAuctionCreated} />
         </div>
 
         {/* Footer */}
@@ -105,4 +112,4 @@ function HomePage() {
   );
 }
 
-export default HomePage;
+export default CreateAuctionPage;
