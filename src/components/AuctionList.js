@@ -95,7 +95,7 @@ const AuctionList = () => {
         try {
           console.log("Intentando fetch directo...");
           const response = await fetch(
-            `${POCKETBASE_URL}/api/collections/auctions/records?filter=(end_time>'${now}')&sort=end_time&expand=user`
+            `${POCKETBASE_URL}/api/collections/auctions/records?sort=end_time&expand=user`
           );
           const data = await response.json();
           console.log("Datos de fetch directo:", data);
@@ -123,7 +123,6 @@ const AuctionList = () => {
         // Si el fetch directo falla, usamos el SDK
         console.log("Intentando con SDK de PocketBase...");
         const records = await pb.collection("auctions").getList(1, 50, {
-          filter: `end_time > "${now}"`,
           expand: "user",
           sort: "end_time",
         });
@@ -360,7 +359,17 @@ const AuctionList = () => {
           amount: amount,
         });
 
-        if (err.status === 404) {
+        // Si el backend rechaza la puja por subasta finalizada
+        if (
+          err.data?.auction?.code === "validation_failed" ||
+          (err.data?.auction?.message &&
+            err.data?.auction?.message.includes("end_time"))
+        ) {
+          setBidError({
+            ...bidError,
+            [auction.id]: "No puedes pujar en una subasta finalizada.",
+          });
+        } else if (err.status === 404) {
           setBidError({
             ...bidError,
             [auction.id]:
@@ -590,13 +599,28 @@ const AuctionList = () => {
       {auctions.map((auction) => {
         // Verificamos si la subasta pertenece al usuario actual
         const isOwnAuction = auction.user === pb.authStore.model?.id;
+        // Determinar si la subasta está finalizada (con margen de 5 segundos después de la hora de finalización)
+        const endTimeMs = new Date(auction.end_time).getTime();
+        const nowMs = Date.now();
+        // La subasta se considera finalizada cuando el tiempo ha terminado
+        const isReallyFinished = endTimeMs <= nowMs;
+        // Determinar si la subasta está por finalizar (menos de 1 hora)
+        const timeLeftMs = endTimeMs - nowMs;
+        const isEndingSoon = !isReallyFinished && timeLeftMs <= 60 * 60 * 1000;
 
         return (
           <div
             key={auction.id}
-            className={`bg-white/70 backdrop-blur-lg rounded-xl shadow-lg overflow-hidden border border-white/20 transition-all duration-300 hover:shadow-xl hover:transform hover:scale-[1.02] ${
-              isOwnAuction ? "ring-2 ring-blue-400" : ""
-            }`}
+            className={`rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:transform hover:scale-[1.02]
+              ${
+                isReallyFinished
+                  ? "bg-white border border-gray-300 opacity-75 grayscale"
+                  : isEndingSoon
+                  ? "bg-white border-4 border-amber-500 shadow-md hover:shadow-xl"
+                  : "bg-white border border-gray-200 hover:shadow-xl"
+              }
+              ${isOwnAuction ? "ring-2 ring-blue-400" : ""}
+            `}
           >
             {/* Etiqueta de subasta propia */}
             {isOwnAuction && (
@@ -625,6 +649,13 @@ const AuctionList = () => {
               <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
                 {auction.title}
               </h2>
+              {isEndingSoon && !isReallyFinished && (
+                <div className="mb-2 flex justify-center">
+                  <span className="px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-full shadow-md animate-[pulse_1.5s_infinite]">
+                    ¡TERMINA PRONTO!
+                  </span>
+                </div>
+              )}
 
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-600 text-sm flex items-center">
@@ -661,8 +692,28 @@ const AuctionList = () => {
                 </div>
               </div>
 
-              {/* Botón para pujar o mensaje de subasta propia */}
-              {isOwnAuction ? (
+              {/* Botón para pujar o mensaje de subasta propia o finalizada */}
+              {isReallyFinished ? (
+                <div className="bg-gray-100 border border-gray-300 text-gray-500 p-3 rounded-xl text-center font-semibold">
+                  <p className="flex items-center justify-center text-sm">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 mr-1.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                    Subasta finalizada
+                  </p>
+                </div>
+              ) : isOwnAuction ? (
                 <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-xl text-center">
                   <p className="flex items-center justify-center text-sm">
                     <svg
@@ -686,13 +737,14 @@ const AuctionList = () => {
                 <button
                   onClick={() => toggleBidForm(auction.id)}
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg active:scale-95"
+                  disabled={isReallyFinished}
                 >
                   {bidForms[auction.id] ? "Cancelar" : "Pujar"}
                 </button>
               )}
 
-              {/* Formulario de puja (solo si no es subasta propia) */}
-              {!isOwnAuction && bidForms[auction.id] && (
+              {/* Formulario de puja (solo si no es subasta propia y no está finalizada) */}
+              {!isOwnAuction && !isReallyFinished && bidForms[auction.id] && (
                 <div className="mt-4 border-t border-gray-200/50 pt-4">
                   <div className="mb-3">
                     <label
