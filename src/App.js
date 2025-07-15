@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
+import CreateAuctionPage from "./pages/CreateAuctionPage";
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
@@ -28,6 +29,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <HomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/create-auction"
+        element={
+          <ProtectedRoute>
+            <CreateAuctionPage />
           </ProtectedRoute>
         }
       />
