@@ -1,15 +1,22 @@
-import React from "react";
+import React, { useState } from "react";
 import AuctionList from "../components/AuctionList";
+import CreateAuctionForm from "../components/CreateAuctionForm";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function HomePage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [refreshAuctions, setRefreshAuctions] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  // Cuando se crea una subasta, refrescamos el listado
+  const handleAuctionCreated = () => {
+    setRefreshAuctions((prev) => !prev);
   };
 
   return (
@@ -73,6 +80,9 @@ function HomePage() {
           </div>
         </header>
 
+        {/* Formulario para crear subasta (solo si está autenticado) */}
+        {user && <CreateAuctionForm onAuctionCreated={handleAuctionCreated} />}
+
         {/* Título de la sección */}
         <div className="mb-8 text-center animate-slide-up">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-800">
@@ -86,7 +96,7 @@ function HomePage() {
 
         {/* Listado de subastas */}
         <div className="animate-fade-in">
-          <AuctionList />
+          <AuctionList key={refreshAuctions} />
         </div>
       </div>
 
